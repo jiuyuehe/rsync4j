@@ -206,19 +206,37 @@ public class RsyncFileUtils {
 	}
 	
 	/**
+	 * Saves a list of differences to a file.
+	 * This is a convenient wrapper around createRsyncFile.
 	 * 
-	 * @param file1
-	 * @param file2
-	 * @return
-	 * @throws IOException 
+	 * @param differences the list of differences
+	 * @param blockSize the block size used
+	 * @param outputFile the output file to create
+	 * @throws IOException if an I/O error occurs
 	 */
-	public static boolean checkFileSame(File file1,File file2) throws IOException{
+	public static void saveDiffToFile(List<DiffCheckItem> differences, int blockSize, File outputFile) throws IOException {
+		try {
+			createRsyncFile(differences, outputFile, blockSize);
+		} catch (Exception e) {
+			if (e instanceof IOException) {
+				throw (IOException) e;
+			}
+			throw new IOException("Failed to save differences to file", e);
+		}
+	}
+
+	/**
+	 * Checks if two files have the same content by comparing their MD5 checksums.
+	 * 
+	 * @param file1 the first file
+	 * @param file2 the second file
+	 * @return true if files have the same content, false otherwise
+	 * @throws IOException if an I/O error occurs
+	 */
+	public static boolean checkFileSame(File file1, File file2) throws IOException {
 		String m1 = QuickMD5.getFileMD5Buffer(file1);
 		String m2 = QuickMD5.getFileMD5Buffer(file2);
-		if(m1.equals(m2))
-			return true;
-		else
-			return false;
+		return m1.equals(m2);
 	}
 	
 	

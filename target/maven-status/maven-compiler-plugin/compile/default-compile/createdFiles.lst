@@ -1,0 +1,13 @@
+free/xiaomin/rsync4j/util/ByteTool.class
+free/xiaomin/rsync4j/RsyncClient$Builder.class
+free/xiaomin/rsync4j/checksums/BlockChecksums.class
+free/xiaomin/rsync4j/util/Rsync4jConstants.class
+free/xiaomin/rsync4j/demo/RsyncDemo.class
+free/xiaomin/rsync4j/RsyncClient.class
+free/xiaomin/rsync4j/util/RsyncFileUtils.class
+free/xiaomin/rsync4j/util/QuickMD5.class
+free/xiaomin/rsync4j/util/Rsync4jException.class
+free/xiaomin/rsync4j/checksums/DiffFileMeta.class
+free/xiaomin/rsync4j/checksums/DiffCheckItem.class
+free/xiaomin/rsync4j/checksums/FileChecksums.class
+free/xiaomin/rsync4j/checksums/RollingChecksum.class
