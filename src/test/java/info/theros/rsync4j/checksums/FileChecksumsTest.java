@@ -39,9 +39,10 @@ public class FileChecksumsTest {
 		FileChecksums checksums = new FileChecksums(emptyFile);
 		Assert.assertNotNull(checksums);
 		Assert.assertEquals(emptyFile.getName(), checksums.getName());
+		// MD5 hash of empty file is d41d8cd98f00b204e9800998ecf8427e
 		Assert
 				.assertEquals(
-						"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+						"d41d8cd98f00b204e9800998ecf8427e",
 						checksums.getHexChecksum());
 		Assert.assertNotNull(checksums.getBlockChecksums());
 		Assert.assertEquals(0, checksums.getBlockChecksums().size());

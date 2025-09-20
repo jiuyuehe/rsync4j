@@ -2,6 +2,8 @@ package free.xiaomin.rsync4j.checksums;
 
 import free.xiaomin.rsync4j.util.Rsync4jConstants;
 import free.xiaomin.rsync4j.util.Rsync4jException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -14,34 +16,38 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * Rolling checksum implementation for rsync algorithm.
+ * This class performs the core rolling checksum algorithm to find differences
+ * between two files efficiently.
  * 
  * @author jiuyuehe
- *
  */
 public class RollingChecksum {
 
+	private static final Logger logger = LoggerFactory.getLogger(RollingChecksum.class);
+
 	/**
-	 * 原始文件
+	 * Source file checksums
 	 */
 	private FileChecksums srcFile;
 
 	/**
-	 * 修改后的文件
+	 * Updated/modified file
 	 */
 	private File updateFile;
 
 	/**
-	 * 存储结果字段
+	 * List to store difference results
 	 */
 	private List<DiffCheckItem> diffList;
 
 	/**
-	 * 随机文件读取
+	 * Random access file for reading
 	 */
 	private RandomAccessFile raf;
 
 	/**
-	 * 随机文件读取
+	 * Random access file for diff operations
 	 */
 	private RandomAccessFile diffraf;
 
@@ -61,15 +67,12 @@ public class RollingChecksum {
 	}
 
 	/**
-	 * 文件info 组装成map
+	 * Converts file checksums to a map for quick lookup.
 	 * 
-	 * @param srcFile
-	 * @return
+	 * @return map of weak checksums to block checksums
 	 */
 	private Map<Long, BlockChecksums> converte2Map() {
-
 		List<BlockChecksums> blist = srcFile.getBlockChecksums();
-
 		Map<Long, BlockChecksums> map = new HashMap<Long, BlockChecksums>();
 
 		for (BlockChecksums blockChecksums : blist) {
@@ -79,130 +82,130 @@ public class RollingChecksum {
 	}
 
 	/**
-	 * 算法
+	 * Rolling checksum algorithm implementation.
+	 * This is the core algorithm that finds differences between files.
 	 */
 	public void rolling() {
 		Map<Long, BlockChecksums> srcMap = converte2Map();
 
-		System.out.println("原始文件块数 : " + srcMap.size());
+		logger.debug("Source file block count: {}", srcMap.size());
 
 		if (diffList == null) {
 			diffList = new ArrayList<DiffCheckItem>();
 		}
 
 		long fileLength = updateFile.length();
-		// 偏移量
 		int offset = 0;
 		do {
 			offset = checkBlk(srcMap, offset, diffList);
 		} while (offset < fileLength);
-		
 
-		if (diffraf != null) {
-			try {
-				diffraf.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-
-		if (raf != null) {
-			try {
-				raf.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
+		// Close resources properly
+		closeResource(diffraf, "diff file");
+		closeResource(raf, "source file");
 		
-		int allDiff = 0;
-		
+		// Calculate statistics
+		int totalDiffBytes = 0;
 		for (DiffCheckItem item : diffList) {
-			
-			if(item.isMatch()){
-				//System.out.println("the same block ： index【" + item.getIndex()+"】");
-			}else{
-				allDiff+=item.getData().length;
-			//System.out.println("diff block : the length:" + item.getData().length);
+			if (!item.isMatch()) {
+				totalDiffBytes += item.getData().length;
 			}
 		}
-		System.out.println("文件总大小："+fileLength +"; 不同块需要数传的大小："+allDiff );
 		
+		logger.debug("File total size: {} bytes; Different blocks to transfer: {} bytes", 
+					fileLength, totalDiffBytes);
 	}
 
 	/**
-	 * 滚动对比
-	 * @param srcMap
-	 * @param blk
-	 * @return
+	 * Rolling comparison algorithm.
+	 * 
+	 * @param srcMap source file blocks map
+	 * @param offset current offset in the file
+	 * @param difList list to store differences
+	 * @return next offset to process
 	 */
 	private int checkBlk(Map<Long, BlockChecksums> srcMap, int offset,
 			List<DiffCheckItem> difList) {
 		int start = offset;
-		BlockChecksums bck = null; // 新老文件相同的块，老文件的
-		BlockChecksums blk = null; // 新文件取出的块
+		BlockChecksums matchedBlock = null; // Matched block from source file
+		BlockChecksums currentBlock = null; // Current block from new file
+		
 		for (; start < updateFile.length(); start++) {
-			blk = getNextBlock(start);
-			if (srcMap.containsKey(blk.getWeakChecksum())) {
-				 bck = srcMap.get(blk.getWeakChecksum());
-				if (bck.getHexStrongChecksum().equals(
-						blk.getHexStrongChecksum())) {
+			currentBlock = getNextBlock(start);
+			if (srcMap.containsKey(currentBlock.getWeakChecksum())) {
+				matchedBlock = srcMap.get(currentBlock.getWeakChecksum());
+				if (matchedBlock.getHexStrongChecksum().equals(
+						currentBlock.getHexStrongChecksum())) {
 					break;
 				}
 			}
 		}
 		
-		if (blk != null) {
-//			System.out.println(" same = start： " + start + "**size:**"
-//					+ (start - offset) + "**");
+		if (currentBlock != null) {
 			int len = start - offset;
 			
 			if (len > 0) {
 				try {
-				if (diffraf == null) {
+					if (diffraf == null) {
 						diffraf = new RandomAccessFile(updateFile, "r");
-				}
-				byte[] by = new byte[len];
-				diffraf.seek(offset);
-				diffraf.read(by, 0, len);
-				
+					}
+					byte[] by = new byte[len];
+					diffraf.seek(offset);
+					diffraf.read(by, 0, len);
+					
 					DiffCheckItem dl = new DiffCheckItem();
 					dl.setMatch(false);
 					dl.setData(by);
 					difList.add(dl);
 					
-				//System.out.println(new String(by));
 				} catch (FileNotFoundException e) {
-					e.printStackTrace();
+					logger.error("File not found while reading diff block", e);
+					throw new Rsync4jException(e);
 				} catch (IOException e) {
-					e.printStackTrace();
+					logger.error("IO error while reading diff block", e);
+					throw new Rsync4jException(e);
 				}
 				
-				if(bck != null){
+				if (matchedBlock != null) {
 					DiffCheckItem dl = new DiffCheckItem();
-					dl.setIndex(bck.getIndex());
+					dl.setIndex(matchedBlock.getIndex());
 					dl.setMatch(true);
 					difList.add(dl);
 				}
-				
-				
-			}else{
+			} else {
 				DiffCheckItem dl = new DiffCheckItem();
-				dl.setIndex(bck.getIndex());
+				dl.setIndex(matchedBlock.getIndex());
 				dl.setMatch(true);
 				difList.add(dl);
 			}
 			return start + Rsync4jConstants.BLOCK_SIZE;
 		} else {
-			System.out.println("the diff block:" + (start - offset));
+			logger.debug("Found diff block at offset: {}", (start - offset));
 			return start;
 		}
 	}
 
 	/**
-	 * 根据文件偏移量获取每一块的checksum
+	 * Helper method to safely close resources.
 	 * 
-	 * @param offset
-	 * @return BlockChecksums
+	 * @param resource the resource to close
+	 * @param description description for logging
+	 */
+	private void closeResource(RandomAccessFile resource, String description) {
+		if (resource != null) {
+			try {
+				resource.close();
+			} catch (IOException e) {
+				logger.warn("Failed to close {}", description, e);
+			}
+		}
+	}
+
+	/**
+	 * Gets the checksum for the next block at the specified offset.
+	 * 
+	 * @param offset the offset in the file
+	 * @return BlockChecksums for the block at the offset
 	 */
 	private BlockChecksums getNextBlock(int offset) {
 		byte[] buf = new byte[Rsync4jConstants.BLOCK_SIZE];
@@ -211,17 +214,19 @@ public class RollingChecksum {
 				raf = new RandomAccessFile(updateFile, "r");
 			}
 			raf.seek(offset);
-			int re = raf.read(buf, 0, Rsync4jConstants.BLOCK_SIZE);
-			BlockChecksums blk = new BlockChecksums(buf, offset,
-					Rsync4jConstants.BLOCK_SIZE);
+			int bytesRead = raf.read(buf, 0, Rsync4jConstants.BLOCK_SIZE);
+			BlockChecksums blk = new BlockChecksums(buf, offset, bytesRead);
 			return blk;
 		} catch (FileNotFoundException e) {
-			e.printStackTrace();
+			logger.error("File not found while reading block at offset {}", offset, e);
+			throw new Rsync4jException(e);
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error("IO error while reading block at offset {}", offset, e);
+			throw new Rsync4jException(e);
 		}
-		return null;
 	}
+
+	// Getter and setter methods
 
 	public FileChecksums getSrcFile() {
 		return srcFile;
@@ -239,4 +244,11 @@ public class RollingChecksum {
 		this.updateFile = updateFile;
 	}
 
+	public List<DiffCheckItem> getDiffList() {
+		return diffList;
+	}
+
+	public void setDiffList(List<DiffCheckItem> diffList) {
+		this.diffList = diffList;
+	}
 }

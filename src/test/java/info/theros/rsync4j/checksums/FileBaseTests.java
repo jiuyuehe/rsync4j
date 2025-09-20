@@ -122,7 +122,6 @@ public class FileBaseTests {
 		javaAdler32.update(by);
 		System.out.println("3   :  "+javaAdler32.getValue());
 		javaAdler32.reset();
-		raf.close();
 		
 		 byte [] by2 = new byte[size];
 		 raf.seek(1);
@@ -134,6 +133,8 @@ public class FileBaseTests {
 		 javaAdler32.update(by2,0,size);
 		 System.out.println("4   :  "+javaAdler32.getValue());
 		 javaAdler32.reset();
+		 
+		 raf.close();
 		
 	}
 }

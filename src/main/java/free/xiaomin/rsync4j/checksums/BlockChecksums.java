@@ -1,64 +1,88 @@
 package free.xiaomin.rsync4j.checksums;
 
 import free.xiaomin.rsync4j.util.Rsync4jException;
+import org.apache.commons.codec.binary.Hex;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.zip.Adler32;
 
-import org.apache.commons.codec.binary.Hex;
-
 /**
- * 文件块校验
+ * Block checksum calculation using weak (Adler32) and strong (MD5) checksums.
+ * This class represents checksums for a single block of data in the rsync algorithm.
  * 
  * @author jiuyuehe
- *
  */
 public class BlockChecksums {
+	
+	private static final Logger logger = LoggerFactory.getLogger(BlockChecksums.class);
+	
 	private int index;
 	private long offset;
 	private long size;
 	private long weakChecksum;
 	private byte[] strongChecksum;
 
+	/**
+	 * Creates block checksums without index.
+	 * 
+	 * @param buf the data buffer
+	 * @param offset the offset in the file
+	 * @param size the size of the data
+	 */
 	public BlockChecksums(byte[] buf, long offset, long size) {
 		this.offset = offset;
 		this.size = size;
-		this.weakChecksum = generateWeakChecksum(buf);
-		this.strongChecksum = generateStrongChecksum(buf);
-	}
-	
-	public BlockChecksums(int index,byte[] buf, long offset, long size) {
-		this.index = index;
-		this.offset = offset;
-		this.size = size;
-		this.weakChecksum = generateWeakChecksum(buf);
-		this.strongChecksum = generateStrongChecksum(buf);
+		this.weakChecksum = generateWeakChecksum(buf, (int)size);
+		this.strongChecksum = generateStrongChecksum(buf, (int)size);
 	}
 	
 	/**
-	 * md5 校验
-	 * @param buf
-	 * @return
+	 * Creates block checksums with index.
+	 * 
+	 * @param index the block index
+	 * @param buf the data buffer
+	 * @param offset the offset in the file
+	 * @param size the size of the data
 	 */
-	private byte[] generateStrongChecksum(byte[] buf) {
+	public BlockChecksums(int index, byte[] buf, long offset, long size) {
+		this.index = index;
+		this.offset = offset;
+		this.size = size;
+		this.weakChecksum = generateWeakChecksum(buf, (int)size);
+		this.strongChecksum = generateStrongChecksum(buf, (int)size);
+	}
+	
+	/**
+	 * Generates MD5 strong checksum for the data.
+	 * 
+	 * @param buf the data buffer
+	 * @param length the length of valid data in buffer
+	 * @return MD5 checksum bytes
+	 */
+	private byte[] generateStrongChecksum(byte[] buf, int length) {
 		try {
 			MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-			messageDigest.update(buf);
+			messageDigest.update(buf, 0, length);
 			return messageDigest.digest();
 		} catch (NoSuchAlgorithmException e) {
+			logger.error("MD5 algorithm not available", e);
 			throw new Rsync4jException(e);
 		}
 	}
 	
 	/**
-	 * adler32 校验
-	 * @param buf
-	 * @return
+	 * Generates Adler32 weak checksum for the data.
+	 * 
+	 * @param buf the data buffer
+	 * @param length the length of valid data in buffer
+	 * @return Adler32 checksum value
 	 */
-	private long generateWeakChecksum(byte[] buf) {
+	private long generateWeakChecksum(byte[] buf, int length) {
 		Adler32 adler32 = new Adler32();
-		adler32.update(buf);
+		adler32.update(buf, 0, length);
 		return adler32.getValue();
 	}
 	
