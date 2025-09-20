@@ -288,7 +288,7 @@ This project is provided as open source software. Please check the license file 
 
 ## Support
 
-This project is maintained by [Qiyun Technology](http://www.yliyun.com) and is used in production for Qiyun Cloud Storage systems.
+This project is maintained by [深圳一粒云科技有限公司](http://www.yliyun.com) and is used in production for YLY Cloud Storage systems.
 
 ---
 
