@@ -2,6 +2,9 @@ package free.xiaomin.rsync4j.checksums;
 
 import free.xiaomin.rsync4j.util.Rsync4jConstants;
 import free.xiaomin.rsync4j.util.Rsync4jException;
+import org.apache.commons.codec.binary.Hex;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -12,25 +15,41 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.codec.binary.Hex;
-
 /**
- * 文件对比
+ * File checksums calculation and management.
+ * This class calculates checksums for entire files and their individual blocks
+ * for use in the rsync algorithm.
+ * 
  * @author jiuyuehe
- *
  */
 public class FileChecksums {
+
+	private static final Logger logger = LoggerFactory.getLogger(FileChecksums.class);
 
 	private String name;
 	private byte[] checksum;
 	private List<BlockChecksums> blockChecksums = new ArrayList<BlockChecksums>();
 
+	/**
+	 * Creates file checksums for the specified file.
+	 * 
+	 * @param file the file to calculate checksums for
+	 */
 	public FileChecksums(File file) {
 		this.name = file.getName();
 		this.checksum = generateFileDigest(file);
 		this.blockChecksums = generateBlockChecksums(file);
+		
+		logger.debug("Generated checksums for file: {} ({} blocks)", 
+					file.getName(), blockChecksums.size());
 	}
 
+	/**
+	 * Generates checksums for individual blocks of the file.
+	 * 
+	 * @param file the file to process
+	 * @return list of block checksums
+	 */
 	private List<BlockChecksums> generateBlockChecksums(File file) {
 		List<BlockChecksums> list = new ArrayList<BlockChecksums>();
 		FileInputStream fis = null;
@@ -41,22 +60,33 @@ public class FileChecksums {
 			long offset = 0;
 			int index = 0;
 			while ((bytesRead = fis.read(buf)) > 0) {
-				list.add(new BlockChecksums(index ,buf, offset, bytesRead));
+				list.add(new BlockChecksums(index, buf, offset, bytesRead));
 				offset += bytesRead;
-				index ++;
+				index++;
 			}
 		} catch (FileNotFoundException e) {
+			logger.error("File not found: {}", file.getAbsolutePath(), e);
 			throw new Rsync4jException(e);
 		} catch (IOException e) {
+			logger.error("IO error reading file: {}", file.getAbsolutePath(), e);
 			throw new Rsync4jException(e);
+		} finally {
+			if (fis != null) {
+				try {
+					fis.close();
+				} catch (IOException e) {
+					logger.warn("Failed to close file input stream", e);
+				}
+			}
 		}
 		return list;
 	}
 	
 	/**
-	 * 获取整个文件的MD5
-	 * @param file
-	 * @return
+	 * Generates MD5 checksum for the entire file.
+	 * 
+	 * @param file the file to process
+	 * @return MD5 checksum bytes
 	 */
 	private byte[] generateFileDigest(File file) {
 		FileInputStream fis = null;
@@ -70,15 +100,17 @@ public class FileChecksums {
 			}
 			return sha.digest();
 		} catch (IOException e) {
+			logger.error("IO error generating file digest: {}", file.getAbsolutePath(), e);
 			throw new Rsync4jException(e);
 		} catch (NoSuchAlgorithmException e) {
+			logger.error("MD5 algorithm not available", e);
 			throw new Rsync4jException(e);
 		} finally {
 			if (fis != null) {
 				try {
 					fis.close();
 				} catch (IOException e) {
-					throw new Rsync4jException(e);
+					logger.warn("Failed to close file input stream", e);
 				}
 			}
 		}
